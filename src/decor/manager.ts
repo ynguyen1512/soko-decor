@@ -12,9 +12,8 @@ import { VARIANTS, type VariantId, type VariantLayer, buildVariant } from './var
 const POP_SECONDS = 0.45
 const SWITCH_SECONDS = 0.6
 
-/** Balcony trees are wider than the balcony is deep: drop sprigs that would show through the band. */
-const insideBalcony = (p: THREE.Vector3) =>
-  p.y > FACADE.parapetTop - 0.05 || (p.z < frontZ(p.x, -FACADE.bandThickness - 0.03) && p.z > 0.04)
+/** The lowest boughs must not poke through the band: drop sprigs below the cap that reach past it. */
+const behindBand = (p: THREE.Vector3) => p.y > FACADE.capTop || p.z < frontZ(p.x) - 0.06
 
 function createTrees() {
   const rng = createRng(2026)
@@ -22,15 +21,15 @@ function createTrees() {
   const g = new THREE.Group()
   g.name = 'trees'
   TREE_XS.forEach((x, i) => {
-    // trees stand in planters, so their base sits a little above the balcony floor
-    const base = new THREE.Vector3(x, FACADE.balconyFloor + 0.15, frontZ(x) - 0.68)
-    g.add(addTree(kit, rng, base, { height: TREE_HEIGHTS[i], spread: 0.33, coreRadius: 0.6, keep: insideBalcony }))
+    // trees stand in planters whose tops sit just behind the band cap
+    const base = new THREE.Vector3(x, FACADE.treeBase, frontZ(x) - 0.78)
+    g.add(addTree(kit, rng, base, { height: TREE_HEIGHTS[i], spread: 0.43, coreRadius: 0.7, keep: behindBand }))
   })
   // the small tree inside the left shop window, with a red bow on top
-  const inside = new THREE.Vector3(-2.75, 0, -0.9)
-  g.add(addTree(kit, rng, inside, { height: 1.5, spread: 0.34, leds: 200, baubles: 30 }))
-  const bow = createBow(0.09, 0.6)
-  bow.position.set(inside.x, inside.y + 1.45, inside.z + 0.12)
+  const inside = new THREE.Vector3(-3.3, 0, -1.1)
+  g.add(addTree(kit, rng, inside, { height: 2.05, spread: 0.36, leds: 420, baubles: 70 }))
+  const bow = createBow(0.1, 0.6)
+  bow.position.set(inside.x, inside.y + 1.98, inside.z + 0.14)
   g.add(bow)
   g.add(buildKit(kit, 'trees'))
   return g
@@ -40,11 +39,11 @@ function createTrees() {
 function createGlowLights() {
   const g = new THREE.Group()
   const lights: { light: THREE.PointLight; base: number }[] = []
-  for (const x of [-3.4, -1.7, 0, 1.7, 3.4]) {
-    const front = new THREE.PointLight(0xffa955, 0.6, 2.4, 1.6)
-    front.position.set(x, FACADE.parapetTop + 0.25, frontZ(x) + 0.7)
-    const back = new THREE.PointLight(0xffb465, 1.3, 3.2, 1.6)
-    back.position.set(x, FACADE.parapetTop + 1.5, frontZ(x) - 0.15)
+  for (const x of TREE_XS) {
+    const front = new THREE.PointLight(0xffa955, 0.45, 2.2, 1.6)
+    front.position.set(x, FACADE.capTop + 0.2, frontZ(x) + 0.7)
+    const back = new THREE.PointLight(0xffb465, 1.6, 3.2, 1.6)
+    back.position.set(x, FACADE.capTop + 1.2, frontZ(x) - 0.2)
     g.add(front, back)
     lights.push({ light: front, base: front.intensity }, { light: back, base: back.intensity })
   }
@@ -101,7 +100,8 @@ export function createDecorManager(root: THREE.Object3D) {
     switchFade = Math.min(1, switchFade + dt / SWITCH_SECONDS)
     // new garland lights come up softly after a switch
     lightUniforms.uOn.value = onLevel * (0.25 + 0.75 * switchFade)
-    for (const { light, base } of glow.lights) light.intensity = base * (0.12 + 0.88 * lightUniforms.uOn.value)
+    const level = lightUniforms.uOn.value * lightUniforms.uBrightness.value
+    for (const { light, base } of glow.lights) light.intensity = base * (0.12 + 0.88 * level)
 
     const now = performance.now() / 1000
     for (const p of pops) {
@@ -132,6 +132,8 @@ export function createDecorManager(root: THREE.Object3D) {
     setLightsOn(on: boolean) { lightsOn = on },
     get lightsOn() { return lightsOn },
     setTwinkle(on: boolean) { lightUniforms.uTwinkle.value = on ? 1 : 0 },
+    /** 0.1 (dim) … 1 (full) */
+    setBrightness(level: number) { lightUniforms.uBrightness.value = THREE.MathUtils.clamp(level, 0.1, 1) },
   }
 }
 

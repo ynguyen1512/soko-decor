@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { C, glossyMat, needleMat, standard } from '../core/materials'
 import { InstanceCollector, ballGeometry, bulbGeometry, createGlowMaterial, sprigGeometry } from './instancing'
 
-const ledMat = createGlowMaterial(C.ledWarm, 4.2, 1)
+const ledMat = createGlowMaterial(C.ledWarm, 3.0, 1)
 
 let capGeo: THREE.BufferGeometry | null = null
 const capGeometry = () => (capGeo ??= new THREE.CylinderGeometry(0.28, 0.28, 0.35, 10))

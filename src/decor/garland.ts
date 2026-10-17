@@ -9,7 +9,7 @@ import { type DecorKit, needleColor } from './kit'
 
 export type DrapeStyle = 'light' | 'cluster'
 
-const TOP = FACADE.parapetTop + 0.05
+const TOP = FACADE.capTop + 0.01
 const W = FACADE.halfWidth
 const SWAG_DIP = 0.2
 
@@ -138,18 +138,20 @@ export function addGarland(kit: DecorKit, rng: Rng, style: DrapeStyle): Garland 
 
 const berryRed = new THREE.Color(C.berry)
 
-/** Clusters of 6–12 glossy red berries on the garland surface. Returns the number of clusters. */
+/** Clusters of 6–12 glossy red berries on the garland surface; `sample` is one cluster near x = −1.5. */
 export function addBerries(kit: DecorKit, rng: Rng, garland: Garland, perMetre: number) {
   const clusters = Math.round(garland.lengthM * perMetre)
+  let sample = garland.surfacePoint(rng)
   for (let c = 0; c < clusters; c++) {
     const centre = garland.surfacePoint(rng)
+    if (Math.abs(centre.x + 1.5) < Math.abs(sample.x + 1.5)) sample = centre
     const n = 6 + Math.floor(rng() * 7)
     for (let i = 0; i < n; i++) {
       const p = centre.clone().add(new THREE.Vector3(gauss(rng) * 0.035, gauss(rng) * 0.035, Math.abs(gauss(rng)) * 0.02))
       kit.berries.add(p, { scale: range(rng, 0.011, 0.016), color: berryRed })
     }
   }
-  return clusters
+  return { clusters, sample }
 }
 
 const ORNAMENT_COLOURS = [
@@ -160,7 +162,7 @@ const ORNAMENT_COLOURS = [
 
 /** Glossy baubles in red / gold / silver. Returns counts per colour. */
 export function addOrnaments(kit: DecorKit, rng: Rng, garland: Garland, perMetre: number) {
-  const counts = { red: 0, gold: 0, silver: 0 }
+  const counts = { red: 0, gold: 0, silver: 0, sample: new THREE.Vector3(-1.5, TOP, 0) }
   const total = Math.round(garland.lengthM * perMetre)
   for (let i = 0; i < total; i++) {
     let roll = rng()
@@ -170,6 +172,7 @@ export function addOrnaments(kit: DecorKit, rng: Rng, garland: Garland, perMetre
     kit.ornaments.add(p, { scale: r, color: choice.color })
     kit.caps.add(p.clone().add(new THREE.Vector3(0, r * 1.02, 0)), { scale: r })
     counts[choice.key]++
+    if (Math.abs(p.x + 1.5) < Math.abs(counts.sample.x + 1.5)) counts.sample = p.clone()
   }
   return counts
 }

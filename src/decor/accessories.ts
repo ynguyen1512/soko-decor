@@ -1,70 +1,153 @@
 // Individual accessories: velvet bows, neon star lights and gift boxes. Ornaments and berries are
 // instanced and placed by the garland generator.
 import * as THREE from 'three'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { C, satinMat, velvetMat } from '../core/materials'
 import { createGlowMaterial } from './instancing'
 
-const bowCache = new Map<number, THREE.BufferGeometry>()
+// ── velvet bow ───────────────────────────────────────────────────────────────────────────────
+// Built like a real wired-velvet bow (docs/ref): wide ribbon swept into two soft, slightly
+// drooping loops, a ribbon-wrapped knot and two long cupped tails with V-cut ends. Units: the bow
+// is ~2 wide before scaling, origin at the knot, facing +Z.
 
-/** One ribbon tail hanging from the knot, bending outward, with a V-cut end. */
+const RIBBON = 0.56
+
+/** A flat ribbon swept along `curve`; `widthDir(t, p)` gives the direction its width runs. */
+function ribbonStrip(curve: THREE.Curve<THREE.Vector3>, samples: number, widthDir: (t: number, p: THREE.Vector3) => THREE.Vector3) {
+  const pos: number[] = []
+  const uv: number[] = []
+  const idx: number[] = []
+  const tangent = new THREE.Vector3()
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples
+    const p = curve.getPointAt(t)
+    curve.getTangentAt(t, tangent)
+    // width direction kept perpendicular to the ribbon's path
+    const w = widthDir(t, p).projectOnPlane(tangent).normalize().multiplyScalar(RIBBON / 2)
+    pos.push(p.x - w.x, p.y - w.y, p.z - w.z, p.x + w.x, p.y + w.y, p.z + w.z)
+    uv.push(0, t, 1, t)
+    if (i > 0) {
+      const a = (i - 1) * 2
+      idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3)
+    }
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  g.setIndex(idx)
+  g.computeVertexNormals()
+  return g
+}
+
+/** One soft loop: out and up from the knot, round the end, sagging back underneath. */
+function loopGeometry(side: 1 | -1) {
+  const pts = [
+    [0.08, 0.08, 0.1], [0.4, 0.44, 0.17], [0.86, 0.52, 0.1], [1.14, 0.2, 0.0],
+    [1.1, -0.24, 0.03], [0.74, -0.4, 0.12], [0.3, -0.24, 0.16], [0.08, -0.06, 0.12],
+  ].map(([x, y, z]) => new THREE.Vector3(side * x, y, z))
+  const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal')
+  const centre = new THREE.Vector3(side * 0.6, 0.04, 0.05)
+  // the ribbon faces partly forward and cups backward at its outer edge: a puffy loop
+  const strip = ribbonStrip(curve, 80, (_t, p) => p.clone().sub(centre).setZ(0).normalize().multiplyScalar(0.8).add(new THREE.Vector3(0, 0, -0.6)))
+  // heavy velvet: the loops droop a little at their outer ends
+  strip.rotateZ(side * -0.14)
+  return strip
+}
+
+/** One tail hanging from the knot: wide, cupped across, gently waved, V-cut at the end. */
 function tailGeometry(side: 1 | -1, length: number) {
-  const g = new THREE.PlaneGeometry(0.34, length, 2, 18)
+  const width = RIBBON * 0.95
+  const g = new THREE.PlaneGeometry(width, length, 4, 24)
   g.translate(0, -length / 2, 0)
   const pos = g.attributes.position as THREE.BufferAttribute
   for (let i = 0; i < pos.count; i++) {
-    let x = pos.getX(i)
+    const x0 = pos.getX(i)
     let y = pos.getY(i)
-    const s = -y / length // 0 at knot → 1 at end
-    // V notch: the middle column of the last row is pulled up
-    if (s > 0.999 && Math.abs(x) < 1e-6) y += 0.22
-    const widen = 1 + s * 0.25
-    x = x * widen + side * (0.08 + 0.42 * s)
-    const z = 0.07 * Math.sin(s * 5 + side) + 0.04 * s
+    const s = THREE.MathUtils.clamp(-y / length, 0, 1) // 0 at the knot → 1 at the end
+    // V notch: pull the last row up towards the centre line
+    if (s > 0.999) y += 0.26 * (1 - Math.abs(x0) / (width / 2))
+    const widen = 1 + s * 0.18
+    const x = x0 * widen + side * (0.1 + 0.34 * Math.sqrt(s))
+    const cup = 0.05 * (1 - (2 * x0 / width) ** 2)
+    const z = 0.03 + cup + 0.06 * Math.sin(s * 4.2 + (side > 0 ? 1.4 : 0)) * s
     pos.setXYZ(i, x, y, z)
   }
   g.computeVertexNormals()
   return g
 }
 
-/**
- * Velvet bow, ~2 units wide before scaling, origin at the knot, facing +Z.
- * `tail` is the tail length in the same units (long tails for the B2 "large bow" look).
- */
+function knotGeometry() {
+  const knot = new RoundedBoxGeometry(0.4, 0.46, 0.26, 4, 0.11)
+  knot.translate(0, 0, 0.12)
+  return knot
+}
+
+const bowCache = new Map<number, THREE.BufferGeometry>()
+
+/** Loops, knot and the plain (left) tail merged; the right tail is separate so it can carry a logo. */
 export function bowGeometry(tail: number) {
   const key = Math.round(tail * 100)
   const hit = bowCache.get(key)
   if (hit) return hit
-  const parts: THREE.BufferGeometry[] = []
-  for (const side of [-1, 1] as const) {
-    // a flat ribbon loop: a torus squashed into a wide band, pinched towards the knot
-    const loop = new THREE.TorusGeometry(0.46, 0.15, 6, 36)
-    loop.scale(1, 0.58, 1)
-    const lp = loop.attributes.position as THREE.BufferAttribute
-    for (let i = 0; i < lp.count; i++) {
-      const x = lp.getX(i)
-      const pinch = THREE.MathUtils.smoothstep(-x * side, 0.1, 0.46)
-      lp.setY(i, lp.getY(i) * (1 - 0.55 * pinch))
-      lp.setZ(i, lp.getZ(i) * 0.28)
-    }
-    loop.computeVertexNormals()
-    loop.rotateZ(side * 0.3)
-    loop.translate(side * 0.48, 0.06, 0)
-    parts.push(loop, tailGeometry(side, tail))
-  }
-  const knot = new THREE.SphereGeometry(0.2, 14, 10)
-  knot.scale(0.9, 1.15, 0.55)
-  knot.translate(0, 0, 0.05)
-  parts.push(knot)
-  const geo = mergeGeometries(parts.map((p) => p.toNonIndexed()))
+  const parts = [loopGeometry(-1), loopGeometry(1), knotGeometry(), tailGeometry(-1, tail)]
+  const geo = mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)))
   bowCache.set(key, geo)
   return geo
 }
 
-export function createBow(size: number, tail: number) {
-  const bow = new THREE.Mesh(bowGeometry(tail), velvetMat())
-  bow.scale.setScalar(size)
+const tailCache = new Map<number, THREE.BufferGeometry>()
+function rightTail(tail: number) {
+  const key = Math.round(tail * 100)
+  if (!tailCache.has(key)) tailCache.set(key, tailGeometry(1, tail))
+  return tailCache.get(key)!
+}
+
+const logoTailMats = new Map<number, THREE.Material>()
+/** Velvet with the white Soko "s" printed on the lower part of the tail. */
+function logoTailMaterial(tail: number) {
+  const key = Math.round(tail * 100)
+  const hit = logoTailMats.get(key)
+  if (hit) return hit
+  const cw = 128
+  const ch = 512
+  const width = RIBBON * 0.95
+  const canvas = document.createElement('canvas')
+  canvas.width = cw
+  canvas.height = ch
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = `#${new THREE.Color(C.velvet).getHexString(THREE.SRGBColorSpace)}`
+  ctx.fillRect(0, 0, cw, ch)
+  // canvas top = the knot end; squash vertically so the glyph is not stretched along the tail
+  ctx.save()
+  ctx.translate(cw / 2, ch * 0.66)
+  ctx.scale(1, ((ch / tail) / (cw / width)))
+  ctx.fillStyle = '#f3ede4'
+  ctx.font = `800 104px 'Fraunces', Georgia, serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('s', 0, 0)
+  ctx.restore()
+  const map = new THREE.CanvasTexture(canvas)
+  map.colorSpace = THREE.SRGBColorSpace
+  map.anisotropy = 4
+  const m = (velvetMat() as THREE.MeshPhysicalMaterial).clone()
+  m.color.set(0xffffff)
+  m.map = map
+  logoTailMats.set(key, m)
+  return m
+}
+
+/**
+ * Velvet bow. `size` scales the ~2-unit-wide bow (0.28 ≈ 56 cm), `tail` is the tail length in
+ * bow units, `logo` prints the Soko "s" on one tail as on the real large bows.
+ */
+export function createBow(size: number, tail: number, logo = false) {
+  const bow = new THREE.Group()
   bow.name = 'bow'
+  bow.add(new THREE.Mesh(bowGeometry(tail), velvetMat()))
+  bow.add(new THREE.Mesh(rightTail(tail), logo ? logoTailMaterial(tail) : velvetMat()))
+  bow.scale.setScalar(size)
   return bow
 }
 

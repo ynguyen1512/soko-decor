@@ -66,6 +66,8 @@ export const lightUniforms = {
   uOn: { value: 1 },
   /** 0 = steady, 1 = full twinkle */
   uTwinkle: { value: 1 },
+  /** user brightness of the decor lights, 0.1–1 */
+  uBrightness: { value: 1 },
 }
 
 const vertexShader = /* glsl */ `
@@ -98,10 +100,11 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uColor;
   uniform float uIntensity;
   uniform float uOn;
+  uniform float uBrightness;
   varying float vGlow;
   varying vec3 vTint;
   void main() {
-    vec3 lit = uColor * vTint * uIntensity * vGlow;
+    vec3 lit = uColor * vTint * uIntensity * vGlow * uBrightness;
     vec3 off = uColor * vTint * 0.08;
     gl_FragColor = vec4(mix(off, lit, uOn), 1.0);
   }

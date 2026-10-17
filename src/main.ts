@@ -1,18 +1,20 @@
 // Entry: builds the scene, the storefront and the decor, then wires the overlay UI.
-// Deep link: ?v=B2 opens a variant directly, &view=close picks a camera preset.
+// Deep links: ?v=B2 opens a variant, &view=close picks a camera preset, &detail=bow a close-up.
 import * as THREE from 'three'
 import { createScene, type View } from './core/scene'
 import { createDecorManager } from './decor/manager'
+import { DETAILS, type DetailId } from './decor/details'
 import { VARIANTS, type VariantId } from './decor/variants'
 import { createUi } from './ui/ui'
 import { FACADE } from './world/facade'
 import { createStorefront } from './world/storefront'
 
 const VIEWS = [
-  { id: 'front', label: 'Chính diện', target: [0, 3.9, 0.6], position: [0, 2.9, 15.5] },
-  { id: 'close', label: 'Cận cảnh', target: [-1.6, 4.45, 1.3], position: [-0.5, 4.25, 4.4] },
-  { id: 'angle', label: 'Góc nghiêng', target: [0, 4.1, 0.6], position: [-9.0, 2.4, 9.8] },
-  { id: 'street', label: 'Từ vỉa hè', target: [0.4, 4.8, 0.9], position: [2.2, 1.6, 5.6] },
+  // matches the reference photo: across the street, eye height, looking slightly up
+  { id: 'front', label: 'Chính diện', target: [0.3, 3.55, 0.3], position: [0.3, 1.7, 14.2] },
+  { id: 'close', label: 'Cận cảnh', target: [-1.9, 4.75, 0.4], position: [-1.0, 4.4, 4.2] },
+  { id: 'angle', label: 'Góc nghiêng', target: [0, 3.6, 0.2], position: [-8.8, 2.0, 10.0] },
+  { id: 'street', label: 'Từ vỉa hè', target: [-0.3, 4.6, 0.4], position: [1.4, 1.6, 4.6] },
 ] as const
 
 type ViewId = (typeof VIEWS)[number]['id']
@@ -48,27 +50,56 @@ async function main() {
   const ui = createUi(document.getElementById('ui')!, {
     variants: VARIANTS,
     views: VIEWS,
-    onVariant: selectVariant,
+    details: DETAILS,
+    onVariant: (id) => {
+      ui.hideCaption()
+      selectVariant(id)
+    },
+    onDetail: (id) => showDetail(id),
     onView: (id) => shell.flyTo(resolveView(id as ViewId, shell.camera)),
     onLights: decor.setLightsOn,
     onTwinkle: decor.setTwinkle,
+    onBrightness: decor.setBrightness,
     onAutoRotate: (on) => {
       shell.controls.autoRotate = on
       shell.controls.autoRotateSpeed = 0.6
     },
   })
 
+  let current: VariantId = initialVariant
+
+  /** Flies to a close-up of one accessory, switching to a variant that has it if needed. */
+  function showDetail(id: DetailId, instant = false) {
+    const detail = DETAILS.find((d) => d.id === id)!
+    const variant = VARIANTS.find((v) => v.id === current)!
+    const target = detail.has(variant) ? current : detail.fallback
+    const layer = selectVariant(target)
+    const point = layer.focus[id]
+    if (!point) return
+    // a little to the right and below, so the tails and drape read in depth
+    const offset = new THREE.Vector3(0.35, -0.08, id === 'bow' ? 1.9 : id === 'garland' ? 1.7 : 1.2)
+    if (shell.camera.aspect < 1) offset.multiplyScalar(1.5)
+    const view = { target: point, position: point.clone().add(offset) }
+    if (instant) shell.setView(view)
+    else shell.flyTo(view)
+    ui.showDetail(detail, target)
+  }
+
   function selectVariant(id: VariantId) {
+    current = id
     const layer = decor.show(id)
     ui.setVariant(id, layer.bom)
     const url = new URL(location.href)
     url.searchParams.set('v', id)
     history.replaceState(null, '', url)
+    return layer
   }
 
   shell.controls.addEventListener('start', ui.clearViewSelection)
   shell.setView(resolveView(initialView, shell.camera))
   selectVariant(initialVariant)
+  const initialDetail = DETAILS.find((d) => d.id === params.get('detail'))
+  if (initialDetail) showDetail(initialDetail.id, true)
   decor.warmUp()
 
   requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById('loader')?.classList.add('done')))

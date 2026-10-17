@@ -2,26 +2,29 @@
 import * as THREE from 'three'
 
 export const C = {
-  sky: 0x070b16,
-  street: 0x15161b,
-  sidewalk: 0x2a2a2e,
-  concrete: 0x9d988f,
-  frame: 0x1b1c20,
-  redWall: 0x8e2a33,
-  creamWall: 0xd8c3a0,
-  neighbour: 0x3a3836,
+  sky: 0x0a1222,
+  street: 0x1a1b1f,
+  band: 0x4a4c51,
+  bandTrim: 0x8e9196,
+  frame: 0x121316,
+  redCladding: 0xb8202b,
+  creamWall: 0xe2d6bd,
+  pierGrey: 0x6f716f,
+  pierBeige: 0xb9b2a3,
+  sofa: 0xc8161e,
+  leaf: 0x5f9a3a,
   needle: 0x1f4a24,
   needleDark: 0x12301a,
-  velvet: 0x8a0b17,
+  velvet: 0x760a17,
   berry: 0xb5101c,
   ornamentRed: 0xa8121e,
   ornamentGold: 0xd9a441,
   ornamentSilver: 0xc9ccd2,
   giftRed: 0xb3141f,
   giftGold: 0xc99a3a,
-  ledWarm: new THREE.Color(1.0, 0.72, 0.36),
+  ledWarm: new THREE.Color(1.0, 0.8, 0.38),
   starWarm: new THREE.Color(1.0, 0.8, 0.45),
-  signBlue: new THREE.Color(0.78, 0.88, 1.0),
+  signWhite: new THREE.Color(0.92, 0.96, 1.0),
   interior: new THREE.Color(1.0, 0.78, 0.45),
 } as const
 
@@ -39,7 +42,7 @@ export const needleMat = () =>
 
 export const velvetMat = () =>
   cached('velvet', () => new THREE.MeshPhysicalMaterial({
-    color: C.velvet, roughness: 0.75, sheen: 0.45, sheenRoughness: 0.5, sheenColor: new THREE.Color(0x9c1a28),
+    color: C.velvet, roughness: 0.8, sheen: 0.9, sheenRoughness: 0.32, sheenColor: new THREE.Color(0xc23a4a),
     side: THREE.DoubleSide,
   }))
 

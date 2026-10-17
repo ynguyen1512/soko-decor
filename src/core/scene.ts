@@ -28,21 +28,21 @@ export function createScene(container: HTMLElement) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.05
+  renderer.toneMappingExposure = 0.95
   Object.assign(renderer.domElement.style, { display: 'block', width: '100%', height: '100%', touchAction: 'none' })
   container.append(renderer.domElement)
 
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(C.sky)
-  scene.fog = new THREE.Fog(C.sky, 22, 60)
+  scene.fog = new THREE.Fog(C.sky, 30, 80)
 
   // A faint studio environment only gives metal ornaments something to reflect.
   const pmrem = new THREE.PMREMGenerator(renderer)
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-  scene.environmentIntensity = 0.12
+  scene.environmentIntensity = 0.06
   pmrem.dispose()
 
-  scene.add(new THREE.HemisphereLight(0x2a3760, 0x0c0c12, 0.55))
+  scene.add(new THREE.HemisphereLight(0x2b3a62, 0x15120e, 0.42))
   const moon = new THREE.DirectionalLight(0x8fa6d8, 0.35)
   moon.position.set(-8, 14, 10)
   scene.add(moon)
@@ -53,7 +53,7 @@ export function createScene(container: HTMLElement) {
   controls.enableDamping = true
   controls.dampingFactor = 0.08
   controls.rotateSpeed = 0.6
-  controls.minDistance = 2.2
+  controls.minDistance = 0.5
   controls.maxDistance = 24
   // The back of the building is not modelled: keep the camera in front of the facade.
   controls.minAzimuthAngle = -1.15
@@ -76,7 +76,7 @@ export function createScene(container: HTMLElement) {
     composer.setSize(w, h)
     camera.aspect = w / h
     // Portrait phones: widen the view so the whole facade still fits.
-    camera.fov = w / h < 0.8 ? 52 : 36
+    camera.fov = w / h < 0.8 ? 52 : 38
     camera.updateProjectionMatrix()
   }
   new ResizeObserver(resize).observe(container)

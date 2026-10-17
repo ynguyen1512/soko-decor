@@ -1,4 +1,5 @@
 // DOM overlay: brand, camera views, light toggles, the A1–B3 variant rail and the materials sheet.
+import type { Detail, DetailId } from '../decor/details'
 import type { BomLine, Variant, VariantId } from '../decor/variants'
 import './styles.css'
 
@@ -10,10 +11,13 @@ export interface ViewPreset {
 export interface UiOptions {
   variants: readonly Variant[]
   views: readonly ViewPreset[]
+  details: readonly Detail[]
   onVariant(id: VariantId): void
+  onDetail(id: DetailId): void
   onView(id: string): void
   onLights(on: boolean): void
   onTwinkle(on: boolean): void
+  onBrightness(level: number): void
   onAutoRotate(on: boolean): void
 }
 
@@ -51,6 +55,7 @@ export function createUi(root: HTMLElement, opts: UiOptions) {
     b.type = 'button'
     b.addEventListener('click', () => {
       viewButtons.forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
+      hideCaption()
       opts.onView(v.id)
     })
     return b
@@ -61,8 +66,27 @@ export function createUi(root: HTMLElement, opts: UiOptions) {
   const toggles = h('div', 'toggles panel')
   const bomButton = h('button', 'chip bom-toggle', 'Vật tư')
   bomButton.type = 'button'
+  // brightness of the decor lights
+  const dimmer = h('label', 'dimmer')
+  const dimmerText = h('span', 'dimmer-text', 'Độ sáng')
+  const dimmerValue = h('output', 'dimmer-value', '100%')
+  const slider = h('input')
+  slider.type = 'range'
+  slider.min = '10'
+  slider.max = '100'
+  slider.step = '5'
+  slider.value = '100'
+  slider.setAttribute('aria-label', 'Độ sáng đèn trang trí')
+  slider.addEventListener('input', () => {
+    dimmerValue.textContent = `${slider.value}%`
+    slider.style.setProperty('--fill', `${((Number(slider.value) - 10) / 90) * 100}%`)
+    opts.onBrightness(Number(slider.value) / 100)
+  })
+  dimmer.append(dimmerText, slider, dimmerValue)
+
   toggles.append(
     toggle('Đèn', true, opts.onLights),
+    dimmer,
     toggle('Nhấp nháy', true, opts.onTwinkle),
     toggle('Tự xoay', false, opts.onAutoRotate),
     bomButton,
@@ -79,7 +103,7 @@ export function createUi(root: HTMLElement, opts: UiOptions) {
   bomClose.setAttribute('aria-label', 'Đóng')
   bomHead.append(bomTitle, bomClose)
   const bomList = h('ul', 'bom-list')
-  const bomFoot = h('p', 'bom-foot', 'Ước tính theo mặt tiền ~8,4m, cây thông 7 cây giữ nguyên. Số liệu tham khảo, cần đo thực tế trước khi báo giá.')
+  const bomFoot = h('p', 'bom-foot', 'Ước tính theo mặt tiền ~8,4m, 5 cây thông giữ nguyên. Số liệu tham khảo, cần đo thực tế trước khi báo giá.')
   bom.append(bomHead, bomList, bomFoot)
   bomButton.addEventListener('click', () => bom.classList.toggle('open'))
   bomClose.addEventListener('click', () => bom.classList.remove('open'))
@@ -101,9 +125,38 @@ export function createUi(root: HTMLElement, opts: UiOptions) {
     rail.append(card)
   })
 
-  const hint = h('div', 'hint', 'Kéo để xoay · Cuộn/chụm để zoom · Phím 1–6 đổi phương án')
+  // ── close-up details (the "Chi tiết …" row of the proposal sheet) ──
+  const details = h('div', 'details panel')
+  details.setAttribute('role', 'group')
+  details.setAttribute('aria-label', 'Xem cận cảnh chi tiết')
+  details.append(h('span', 'details-label', 'Chi tiết'))
+  const detailButtons = new Map<DetailId, HTMLButtonElement>()
+  for (const d of opts.details) {
+    const b = h('button', 'chip detail', d.label)
+    b.type = 'button'
+    b.addEventListener('click', () => opts.onDetail(d.id))
+    detailButtons.set(d.id, b)
+    details.append(b)
+  }
+  details.append(h('span', 'hint', 'Kéo để xoay · Cuộn/chụm để zoom · Phím 1–6'))
 
-  root.append(brand, tools, bom, rail, hint)
+  const caption = h('aside', 'caption panel')
+  caption.setAttribute('aria-live', 'polite')
+  const captionTitle = h('h2', 'caption-title')
+  const captionText = h('p', 'caption-text')
+  const captionMeta = h('p', 'caption-meta')
+  const captionClose = h('button', 'bom-close caption-close', '×')
+  captionClose.type = 'button'
+  captionClose.setAttribute('aria-label', 'Đóng')
+  caption.append(captionClose, captionTitle, captionText, captionMeta)
+
+  const hideCaption = () => {
+    caption.classList.remove('open')
+    for (const b of detailButtons.values()) b.setAttribute('aria-pressed', 'false')
+  }
+  captionClose.addEventListener('click', hideCaption)
+
+  root.append(brand, tools, caption, bom, details, rail)
 
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return
@@ -129,5 +182,14 @@ export function createUi(root: HTMLElement, opts: UiOptions) {
     clearViewSelection() {
       viewButtons.forEach((x) => x.setAttribute('aria-pressed', 'false'))
     },
+    showDetail(d: Detail, variant: VariantId) {
+      viewButtons.forEach((x) => x.setAttribute('aria-pressed', 'false'))
+      for (const [id, b] of detailButtons) b.setAttribute('aria-pressed', String(id === d.id))
+      captionTitle.textContent = d.title
+      captionText.textContent = d.description
+      captionMeta.textContent = `Đang xem trong phương án ${variant}`
+      caption.classList.add('open')
+    },
+    hideCaption,
   }
 }

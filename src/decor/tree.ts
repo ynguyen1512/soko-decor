@@ -24,9 +24,9 @@ const baubleRed = new THREE.Color(C.ornamentRed)
 export function addTree(kit: DecorKit, rng: Rng, base: THREE.Vector3, opts: TreeOptions) {
   const H = opts.height
   const R = H * (opts.spread ?? 0.36)
-  const sprigs = opts.sprigs ?? Math.round(520 * H)
-  const leds = opts.leds ?? Math.round(230 * H)
-  const baubles = opts.baubles ?? Math.round(14 * H)
+  const sprigs = opts.sprigs ?? Math.round(1050 * H)
+  const leds = opts.leds ?? Math.round(420 * H)
+  const baubles = opts.baubles ?? Math.round(42 * H)
   const keep = opts.keep ?? (() => true)
 
   const core = new THREE.Mesh(new THREE.ConeGeometry(R * (opts.coreRadius ?? 0.82), H * 0.97, 14, 1, true), coreMat)
@@ -36,7 +36,7 @@ export function addTree(kit: DecorKit, rng: Rng, base: THREE.Vector3, opts: Tree
   /** Radius of the silhouette at height fraction t: tiered, so the tree reads as layered boughs. */
   const radiusAt = (t: number) => {
     const tier = (t * tiers) % 1
-    return R * (1 - t) * (0.78 + 0.22 * (1 - tier)) + 0.03
+    return R * (1 - t) * (0.88 + 0.12 * (1 - tier)) + 0.03
   }
   const surfacePoint = (t: number, a: number, depth: number) => {
     const r = radiusAt(t) * depth
@@ -50,7 +50,7 @@ export function addTree(kit: DecorKit, rng: Rng, base: THREE.Vector3, opts: Tree
     const depth = range(rng, 0.7, 1.0)
     const pos = surfacePoint(t, a, depth * 0.8)
     const dir = new THREE.Vector3(Math.cos(a), range(rng, -0.55, 0.05), Math.sin(a)).normalize()
-    const scale = range(rng, 0.2, 0.32) * (0.55 + 0.45 * (1 - t)) * (H / 2.2)
+    const scale = range(rng, 0.24, 0.36) * (0.55 + 0.45 * (1 - t)) * (H / 1.8)
     // test the sprig's tip as well: a sprig rooted behind a wall can still reach through it
     if (!keep(pos) || !keep(pos.clone().addScaledVector(dir, scale * 1.15))) continue
     kit.needles.add(pos, {
@@ -76,7 +76,7 @@ export function addTree(kit: DecorKit, rng: Rng, base: THREE.Vector3, opts: Tree
     const a = rng() * Math.PI * 2
     const pos = surfacePoint(t, a, 0.98)
     if (!keep(pos)) continue
-    kit.berries.add(pos, { scale: range(rng, 0.025, 0.04), color: baubleRed })
+    kit.ornaments.add(pos, { scale: range(rng, 0.03, 0.048) * (H / 1.5), color: baubleRed })
   }
   return core
 }
